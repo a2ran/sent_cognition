@@ -31,3 +31,70 @@ new_tokenizer = tokenizer.train_new_from_iterator(batch_iterator(), vocab_size =
 
 ## 2. Text Classification Model 구축
 
+**모델 구조도**
+
+1. 입력 데이터
+   
+```
+ids: tensor([   2, 3219, 1568, 3034, 1915, 2902,  812, 3192, 3665, 2836, 3236, 2849,
+         649, 1924, 1554, 2868,   10,    3,    1,    1,    1,    1,    1,    1,
+           1,    1,    1,    1,    1,    1,    1,    1])
+mask: tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0])
+targets: 5
+
+[CLS] 면접에 떨어졌다는 소식을 듣고 너무 실망해서 밥맛도 없어. [SEP] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD] [PAD]
+```
+
+2. 모델 구조
+
+```
+입력 데이터
+|
+----인코더 (TransformerWrapper)---------------------
+| 토큰 임베딩 (4096 -> 512)
+| 포지셔널 임베딩 (64 -> 512)
+| 어텐션 layers (총 18개)
+| -- pre-norm Normalization
+| -- Position-wise Feed Forward (512 -> 2048 -> 512)
+| -- 어텐션 layer (Q, K, V = 512)
+| -- 최종 layer normalization
+| -- Position-wise Feed Forward (512 -> 4096)
+--------------------------------
+|
+----분류기 (NN_Classifier)---------------------------
+| Conv1d layers (총 3개) (1층: 1 -> 128, kernel_size=3, 나머지 128 -> 128, kernel_size=3)
+| MaxPooling layer (MaxPool1d: kernel_size=2, stride=2)
+| Fully Connected layer
+| -- Feed Forward (2045 -> 7)
+| -- Dropout (p = 0.1)
+| -- 활성화 함수 (Tanh)
+| 어텐션 layer
+| -- Linear (W: in_features=2045, out_features=2045)
+| -- Linear (V: in_features=2045, out_features=1)
+-----------------------------------------------------
+```
+
+텍스트 분류 (Text Classification) 모델은 Multi-Particle Dynamic System Point of View 트랜스포머 구조를 차용한 Macaron-NET [링크](https://arxiv.org/abs/1906.02762)을 인코더 (Encoder)로 64차원의 입력 벡터를 4096 차원의 고차원 벡터로 보낸 이후, 컨볼루션 레이어를 사용한 Fully Connected Network에 어텐션 (Attention) layer를 추가해 문장 내 토큰간의 관계를 고려한 분류기 구조를 구축하였다.
+
+![image](https://github.com/a2ran/sent_cognition/assets/121621858/13674db4-d3a6-4808-891d-5742d31c48c6)
+
+![image](https://github.com/a2ran/sent_cognition/assets/121621858/d1f1f126-9e56-46b6-86fc-7e9bb6f704e3)
+
+## 3. Audio Classification Model 작업
+
+사용자의 음성을 기반으로 감성 분석 작업을 진행하기 위해, Meta에서 개발한 Wav2Vec2.0 모델의 weight과 bias을 가져와 학습을 진행하고자 한다.
+
+![image](https://github.com/a2ran/sent_cognition/assets/121621858/b1ff3e2d-629b-4db4-9f41-b4fccd626ddf)
+
+self-supervised learning 기법을 사용해 음성의 음향적 특징을 추출해 감성인식을 보조하는 wav2vec2.0은 사용성이 높은 모델이지만, 모델 자체 용량이 무거워 (파라미터 수 3.1M, 총 용량 1.2GB) 멀티모달 구축에는 MFCC 모델을 사용했지만, 모델의 성능을 유지하면서 사용 용량을 줄이는 작업을 꾸준이 하여, 작업한 내역을 남기고자 한다. 현재 용량 축소는 18개의 encoder convlution layer를 3개로 축소하는 방식으로 진행했지만, 추후 작업을 진행한다면 용량을 줄이는 동시에 모델 전반의 weight와 bias을 반영하는 방면으로 작업을 진행할 예정이다.
+
+## 4. Multimodal 모델 구축
+
+최종적으로 구축한 Text_Classification 모델과 음향적 특징을 추출하는 MFCC 모델을 concat해 최종 multimodal framework을 구축했다.
+
+![image](https://github.com/a2ran/sent_cognition/assets/121621858/ed316425-02bc-45f8-af1b-f2a510c2e150)
+
+![image](https://github.com/a2ran/sent_cognition/assets/121621858/dd7e859c-9350-4b0a-9ef0-6078ba65b4a3)
+
+
